@@ -293,6 +293,28 @@ python evaluator/score.py \
 Repeat export/scoring for B and each replicate. The scorer and answer key must
 remain inaccessible during generation.
 
+## Condition C: rescue over a frozen, scored B run
+
+C runs only after a B generation is frozen, exported and privately scored. It
+reads the scoring file's per-question `correct`/`accepted`/`resolved` booleans
+(never answers), keeps every B Yes, and gives each other question one repair in its
+own OpenCode attempt container. The levels are nested: `c_minimal` (1 call),
+`c_single` (+ semantic audit, 1 call), `c_blind` (+ parent-blind contract, 2 calls).
+Model and effort default to the B run's manifest. A policy interruption keeps the B
+answer; there is no retry.
+
+```bash
+# After B: export, then score privately (outside this checkout) to <scoring.json>.
+python conditions/c/c_minimal/runner.py \
+  --parent-generation "analysis/${tag}_generation.json" --parent-scoring <scoring.json>   # preflight
+VERSION=all scripts/run_c.sh "$tag" <scoring.json>   # c_minimal, c_single, c_blind + export
+# Then score results/<tag>/<level>.jsonl privately, like Native/B.
+```
+
+All levels on one B run share `analysis/<tag>_c_parent.json`, so they repair the same
+questions. See [conditions/c/README.md](conditions/c/README.md) for the hierarchy and
+per-question pipeline.
+
 ## Diagnose failed attempts
 
 Both runners create generation-output and report parent directories before agent
@@ -347,7 +369,11 @@ python -m unittest common.integrity.test_opencode_capture \
   common.integrity.test_progress \
   common.integrity.test_project_credentials \
   common.integrity.test_gateway_body common.integrity.test_gateway_routes \
-  common.integrity.test_attempt_container common.integrity.test_controller_retry_policy
+  common.integrity.test_attempt_container common.integrity.test_controller_retry_policy \
+  conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
+  conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
+  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
+  conditions.c.c_blind.test_c_blind
 
 # Optional real CLI against a local fake model, with zero paid calls:
 NATIVE_B_TEST_OPENCODE_BINARY=/absolute/path/to/opencode \
