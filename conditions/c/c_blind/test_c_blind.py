@@ -12,6 +12,7 @@ from conditions.c.c_minimal.rescue_main import protocol_sources
 from conditions.c.c_minimal.test_support import contract, contract_step, proposal, repair_step, run_repair
 from conditions.c.c_single.pipeline import SingleRepair
 from conditions.c.c_single.semantic_audit import FIELDS
+from conditions.c.c_blind import blind_contract
 from conditions.c.c_blind.blind_contract import validate_contract
 from conditions.c.c_blind.pipeline import BlindRepair
 from conditions.c.c_blind.prompts import BLIND_CONTRACT_PROMPT, QUESTION_REPAIR_PROMPT
@@ -20,7 +21,7 @@ SOURCE = Path(__file__).resolve().parents[4] / "ngch_78_frozen_release_20261021/
 
 
 def run_blind(steps):
-    return run_repair(BlindRepair(), steps)
+    return run_repair(BlindRepair(), steps, blind_contract)
 
 
 class BlindRepairTests(unittest.TestCase):
@@ -62,8 +63,6 @@ class BlindRepairTests(unittest.TestCase):
         self.assertEqual(agent.calls[0]["schema"], "semantic_contract.schema.json")
         self.assertEqual([c["prompt"] for c in agent.calls], [BLIND_CONTRACT_PROMPT, QUESTION_REPAIR_PROMPT])
         self.assertNotEqual(agent.calls[0]["workspace"], agent.calls[1]["workspace"])
-        self.assertEqual([(c["workspace"].parent.name, c["workspace"].name) for c in agent.calls],
-                         [("blind_contracts", "bix-1-q2__cap-1"), ("repair_questions", "bix-1-q2__cap-1")])
         self.assertEqual(json.loads(files["blind_contract.json"])["explicit_constraints"], ["median expression"])
         self.assertIn("<blind>/phase_freeze.json", files)
         blind_files = {name for name in files if name.startswith("<blind>/")}

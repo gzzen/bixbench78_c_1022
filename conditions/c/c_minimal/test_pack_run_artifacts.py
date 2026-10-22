@@ -23,13 +23,13 @@ FILES = {
     "runs/exp_b_c_blind/code_snapshot/conditions/c/c_minimal/pipeline.py": "x = 1\n",
     "runs/exp_b_c_blind/frozen_parent_packets/q2/primary_canonical.json": "{}",
     "runs/exp_b_c_blind/frozen_parent_packets/q2/analysis/scripts/b.py": "print('b')\n",
-    "runs/exp_b_c_blind/repair_questions/q2__cap/repair_packet.json": "{}",
-    "runs/exp_b_c_blind/repair_questions/q2__cap/repair_result.json": "{}",
-    "runs/exp_b_c_blind/repair_questions/q2__cap/final_result.json": "{}",
-    "runs/exp_b_c_blind/repair_questions/q2__cap/analysis/semantic_audit.json": "{}",
-    "runs/exp_b_c_blind/repair_questions/q2__cap/data/raw.csv": "a\n",
-    "runs/exp_b_c_blind/blind_contracts/q2__cap/blind_contract.json": "{}",
-    "runs/exp_b_c_blind/blind_contracts/q2__cap/phase_freeze.json": "{}",
+    "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/repair_packet.json": "{}",
+    "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/repair_result.json": "{}",
+    "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/final_result.json": "{}",
+    "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/analysis/semantic_audit.json": "{}",
+    "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/data/raw.csv": "a\n",
+    "runs/exp_b_c_blind/blind_contracts/q2/bix-1__cap/blind_contract.json": "{}",
+    "runs/exp_b_c_blind/blind_contracts/q2/bix-1__cap/phase_freeze.json": "{}",
     "analysis/exp_b_generation.json": "{}",
     "analysis/exp_b_scoring.json": "{}",
     "analysis/exp_b_c_parent.json": "{}",
@@ -64,7 +64,7 @@ class PackRunArtifactsTests(unittest.TestCase):
         self.assertEqual(manifest["run_roots"], ["runs/exp_b", "runs/exp_b_c_blind"])
         files = {entry["path"]: entry for entry in manifest["files"]}
         expected = set(FILES) - {"runs/exp_b/0000/bix-1__cap/data/raw.csv",
-                                 "runs/exp_b_c_blind/repair_questions/q2__cap/data/raw.csv",
+                                 "runs/exp_b_c_blind/repair_questions/q2/bix-1__cap/data/raw.csv",
                                  "analysis/exp_b_scoring.json"}
         self.assertEqual(set(files), expected)
         self.assertEqual(manifest["excluded_answer_derived"], ["analysis/exp_b_scoring.json"])
@@ -84,7 +84,7 @@ class PackRunArtifactsTests(unittest.TestCase):
         names = {path.relative_to(self.root).as_posix() for path in pack.workspace_artifacts(roots)}
         self.assertIn("runs/exp_b_c_blind/protocol.json", names)
         self.assertIn("runs/exp_b_c_blind/code_snapshot/conditions/c/c_minimal/pipeline.py", names)
-        self.assertIn("runs/exp_b_c_blind/blind_contracts/q2__cap/phase_freeze.json", names)
+        self.assertIn("runs/exp_b_c_blind/blind_contracts/q2/bix-1__cap/phase_freeze.json", names)
 
 
 if __name__ == "__main__":

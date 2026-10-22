@@ -27,8 +27,8 @@ WORKSPACE_FILES = (
 # Per-run-root records (C: protocol, prompt and code snapshot frozen before the first model call).
 RUN_ROOT_FILES = ("protocol.json", "prompt_snapshot.json")
 RUN_ROOT_DIRS = ("code_snapshot",)
-# C workspaces live under these stages, one <question_id>__<capsule_uuid> directory per question, instead of NNNN/.
-C_STAGES = ("repair_questions/*", "blind_contracts/*", "frozen_parent_packets/*")
+# C workspaces live under these stages, one directory per question, instead of NNNN/.
+C_STAGES = ("repair_questions/*/*", "blind_contracts/*/*", "frozen_parent_packets/*")
 # Path components that mark C output (runs/<tag>_c_minimal, analysis/<tag>_c_parent.json, results/<tag>/c_blind.jsonl).
 C_OUTPUT = re.compile(r"(?:^|_)c_(?:minimal|single|blind|parent)(?:[._]|$)", re.I)
 # Generated scripts, audits and outputs. data/, tmp/ and home/ (OpenCode config/state) are never packed.

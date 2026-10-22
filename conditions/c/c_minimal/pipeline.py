@@ -10,9 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
-from common.benchmark.a84_contract import (environment_manifest, load_rows, materialize_common_native_inputs,
-                                          public_question, sha256_file, write_json)
-from common.integrity.capsule_workspace import validate_native_result
+from common.benchmark.a84_contract import load_rows, public_question, sha256_file, write_json
+from common.integrity.capsule_workspace import prepare_workspace, validate_native_result
 from common.integrity.codex_capture import command_metrics
 from common.integrity.isolation_audit import audit_events_v121
 from common.integrity.opencode_capture import generation_failure, write_result
@@ -23,15 +22,6 @@ from conditions.c.c_minimal.repair.repair_policy import audit_repair_execution, 
 
 ROOT = Path(__file__).resolve().parents[3]
 REPAIR_SCHEMA = ROOT / "conditions/c/c_minimal/repair_result.schema.json"
-
-
-def question_workspace(stage_root: Path, row: Mapping[str, Any]) -> Path:
-    """One flat workspace per question, named like B's: <stage>/<question_id>__<capsule_uuid>."""
-    workspace = stage_root / f"{row['question_id']}__{row['capsule_uuid']}"
-    if workspace.exists():
-        raise FileExistsError(f"refusing existing workspace: {workspace}")
-    materialize_common_native_inputs(workspace, [dict(row)], environment_manifest()["values"])
-    return workspace
 
 
 def rows_by_capsule() -> dict[str, list[dict[str, Any]]]:
@@ -283,7 +273,7 @@ class MinimalRepair:
             "workflow_summary": primary.get("workflow_summary", "imported B primary"),
             "results": [localize_repair_paths(copy.deepcopy(primary_by_id[qid]))],
         }
-        workspace = question_workspace(run_root / "repair_questions", row)
+        workspace, _ = prepare_workspace(qid, run_root / "repair_questions", [dict(row)])
         write_json(workspace / "question_only.json", dict(row))
         pre = self.pre_repair(row, run_root, timeout)
         if pre is not None and pre.failure:
