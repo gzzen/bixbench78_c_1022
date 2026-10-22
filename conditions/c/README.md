@@ -95,8 +95,10 @@ python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/pilo
 VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
 ```
 
-`run_c.sh B_TAG [SCORING_JSON]` uses `analysis/<B_TAG>_scoring.json` by default; if that
-file is missing it runs step 1 itself (export, then `../bixbench78_grader/score.py`).
+`run_c.sh B_TAG [SCORING_JSON]` starts from scratch every time: it re-exports B, re-scores it
+with `../bixbench78_grader/score.py` (overwriting `analysis/<B_TAG>_scoring.json`; skipped when
+`SCORING_JSON` is given), rebuilds the parent registry, and deletes the selected levels' run
+trees and outputs before running them.
 
 A C run lives next to its B parent, at `runs/<B_TAG>_<level>` (for example
 `runs/hard_isolated_<id>_b_c_minimal`), so `scripts/pack_run_artifacts.py <experiment_id>`
