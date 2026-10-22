@@ -1,0 +1,112 @@
+<!-- Path: `conditions/c/README.md`; Purpose: overview of the C hierarchy c_minimal ⊂ c_single ⊂ c_blind. -->
+# Condition C: question-local rescue over a frozen B parent
+
+C is a **feedback-assisted** condition. It never reruns B. It reads one frozen B
+generation and that generation's post-freeze private scoring, keeps every B Yes
+(correct, accepted and resolved) unchanged, and gives each other question one
+isolated repair. A repair that is invalid, abstains, or is stopped by the policy
+guard keeps the frozen B answer. Final score = B compliant correct + C rescues.
+
+This is a port of `solver/conditions/c/` from the frozen
+`ngch_78_frozen_release_20261021` package (Codex) to this checkout's OpenCode v2
+per-attempt Docker boundary. Prompts are byte-identical to the source.
+
+## Hierarchy
+
+The source's three `--policy` values are strictly nested; each level adds one step
+to its parent. Prompts are the exception: every level supplies its own.
+
+```text
+c_minimal  (C-v6, source "minimal")   frozen-B packet → 1 repair call → validation → fallback
+   └─ c_single  (C-v5, "single")      + analysis/semantic_audit.json must pass validate_audit
+        └─ c_blind  (C-v4.1, "blind") + parent-blind semantic contract call before the repair
+```
+
+| Level | Class | Calls / question | Prompt |
+|---|---|---|---|
+| `c_minimal` | `MinimalRepair` | 1 | `MINIMAL_REPAIR_PROMPT` |
+| `c_single` | `SingleRepair(MinimalRepair)` | 1 | `SINGLE_REPAIR_PROMPT` |
+| `c_blind` | `BlindRepair(SingleRepair)` | 2 | `QUESTION_REPAIR_PROMPT` + `BLIND_CONTRACT_PROMPT` |
+
+The five selected G+C seeds in the frozen package were all produced by **c_minimal**
+(prompt sha256 `60d92664…`, pinned by `c_minimal/test_c_minimal.py`). c_single and
+c_blind have no historical runs, so results from them are new measurements.
+
+## Layout
+
+```text
+conditions/c/
+├── c_minimal/              base level: every core feature
+│   ├── parent.py           load/verify frozen B + scoring; Yes lock; per-question packets
+│   ├── agent_call.py       one isolated OpenCode call (Docker + gateway + live guard); token usage
+│   ├── pipeline.py         MinimalRepair: the repair pipeline and its two extension hooks
+│   ├── rescue_main.py      CLI, protocol + code snapshot of the level lineage, thread pool, freeze, report
+│   ├── repair/             repair rules (diagnosis, repair_policy; unchanged from source)
+│   ├── repair_result.schema.json, prompts.py, runner.py, config.json
+│   └── test_*.py           fixtures, policy, pipeline, parent, CLI, export (offline)
+├── c_single/               pipeline.py (SingleRepair), semantic_audit.py, prompts.py, runner.py, config.json, test
+└── c_blind/                pipeline.py (BlindRepair), blind_contract.py, semantic_contract.schema.json,
+                            prompts.py, runner.py, config.json, test
+```
+
+Imports only go up the hierarchy: `c_blind` → `c_single` → `c_minimal` → `common`,
+`conditions.b`. A run snapshots the code of its level and every ancestor
+(`protocol.json` → `lineage`, `sources`, `code_snapshot/`).
+
+## Per-question pipeline (`MinimalRepair.run_question`)
+
+1. Fresh `repair_questions/<qid>/` workspace with `question_only.json` and capsule `data/`.
+2. Hook `pre_repair`: nothing in c_minimal/c_single. In c_blind, a separate
+   `blind_contracts/<qid>/` call with no parent artifacts produces the contract; it must
+   quote the question verbatim. Failure → repair skipped, B kept.
+3. Hand over frozen B evidence: `repair_packet.json` (B answer, verdict `no`, controller
+   diagnostics), `primary_*.json`, B `analysis/scripts/`, small intermediate tables.
+4. One OpenCode call with the level's prompt and `repair_result.schema.json`.
+5. Validate: JSON schema → no-op normalization → repair policy (≤3 dimensions, 2–3
+   interpretations, rerun with persisted `analysis/scripts` source) → unresolved falls
+   back to B → result shape → grounding → path/inline-code audit.
+6. Hook `post_validate`: nothing in c_minimal; c_single (and so c_blind) requires a valid
+   `analysis/semantic_audit.json`.
+7. Any failure or policy interruption → frozen B answer. No retry.
+
+## Run
+
+Prerequisites: a frozen B generation from `conditions/b/runner.py` and its private
+scoring (`status: completed_posthoc_after_freeze`, produced outside this checkout).
+
+```bash
+# Preflight: no model calls; prints locked/target counts, model and default paths.
+python conditions/c/c_minimal/runner.py \
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
+
+# One-question paid pilot with its own paths, then full runs + export:
+python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/c/pilot_c_minimal \
+  --output analysis/pilot_c_minimal_generation.json --report reports/PILOT_C_MINIMAL.md \
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
+VERSION=all scripts/run_c.sh <B_TAG> <scoring.json>    # c_minimal, c_single, c_blind
+```
+
+Model and effort default to the parent B manifest (B and C were matched historically);
+override with `--model` / `--repair-reasoning-effort`. All levels share
+`analysis/<B_TAG>_c_parent.json`, so they repair exactly the same questions.
+`--execute` refuses a nonempty run root or an existing output file.
+
+Tests (offline, from the checkout root):
+
+```bash
+python -m unittest conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
+  conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
+  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
+  conditions.c.c_blind.test_c_blind
+```
+
+## Differences from the Codex source
+
+- Agent: `opencode run` inside the per-attempt Docker boundary instead of `codex exec`;
+  the final JSON is taken from the last assistant message and schema-validated.
+- The live answer-blind guard can stop a call; that counts as a failed repair (no retry).
+- Network: the source's blind-contract phase ran without network; here every call uses
+  the shared gateway's scientific allowlist.
+- The older capsule-level C-v4 code (`execute_core`, in-process evaluator) is not ported.
+- A B capsule with no `capsule_result.json` gets an unresolved primary that keeps its
+  capsule identity (the source crashed), so the prompts' reconstruction path can run.

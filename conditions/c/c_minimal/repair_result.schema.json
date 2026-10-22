@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Path: conditions/c/c_minimal/repair_result.schema.json | Purpose: solver output contract for standalone C-v3 evidence-backed coupled repair.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["capsule_uuid", "short_id", "workflow_summary", "results", "repair_records"],
+  "properties": {
+    "capsule_uuid": {"type": "string"},
+    "short_id": {"type": "string"},
+    "workflow_summary": {"type": "string"},
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question_id", "status", "candidates", "summary"],
+        "properties": {
+          "question_id": {"type": "string"},
+          "status": {"type": "string", "enum": ["resolved", "unresolved"]},
+          "candidates": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["answer", "method", "evidence"],
+              "properties": {
+                "answer": {"type": "string"},
+                "method": {"type": "string"},
+                "evidence": {"type": "string"}
+              }
+            }
+          },
+          "summary": {"type": "string"}
+        }
+      }
+    },
+    "repair_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question_id", "primary_feedback", "diagnosis", "changed_dimensions", "rationale", "interpretations", "execution"],
+        "properties": {
+          "question_id": {"type": "string"},
+          "primary_feedback": {"type": "string", "const": "no"},
+          "diagnosis": {"type": "string", "minLength": 1},
+          "changed_dimensions": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "string",
+              "enum": ["scope_filter", "entity_mapping", "aggregation_denominator", "statistical_method", "unit_precision_type", "external_resource_version"]
+            }
+          },
+          "rationale": {"type": "string", "minLength": 1},
+          "interpretations": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["interpretation", "evidence"],
+              "properties": {
+                "interpretation": {"type": "string", "minLength": 1},
+                "evidence": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "execution": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reran_analysis", "computation_required", "source_files"],
+            "properties": {
+              "reran_analysis": {"type": "boolean"},
+              "computation_required": {"type": "boolean"},
+              "source_files": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    }
+  }
+}

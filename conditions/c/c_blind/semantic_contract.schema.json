@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["question_id", "fields", "explicit_constraints", "ambiguities"],
+  "properties": {
+    "question_id": {"type": "string"},
+    "fields": {
+      "type": "object", "additionalProperties": false,
+      "required": ["data_object", "observation_unit", "comparison", "metric_or_outcome", "unit_or_scale", "denominator_or_population", "method_or_estimator"],
+      "properties": {
+        "data_object": {"type": "string"},
+        "observation_unit": {"type": "string"},
+        "comparison": {"type": "string"},
+        "metric_or_outcome": {"type": "string"},
+        "unit_or_scale": {"type": "string"},
+        "denominator_or_population": {"type": "string"},
+        "method_or_estimator": {"type": "string"}
+      }
+    },
+    "explicit_constraints": {"type": "array", "items": {"type": "string"}},
+    "ambiguities": {"type": "array", "items": {"type": "string"}}
+  }
+}

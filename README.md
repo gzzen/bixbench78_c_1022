@@ -5,10 +5,11 @@ output, reports, frozen predictions, diagnostics, run workspaces, or staging
 files. It also contains no answer key or scorer. Score frozen predictions
 later in the private evaluation bundle, never from this checkout.
 
-- `conditions/`: Native and B runners, prompts, schemas and protocols
+- `conditions/`: Native and B runners, prompts, schemas and protocols; C rescue
+  levels over a frozen, privately scored B run (`conditions/c/`)
 - `common/`: isolation boundary, host gateway, OpenCode adapter and tests
 - `environment/`: `agent_bix` Conda environment specification
-- `scripts/`: run, continue, progress, export and recovery tools
+- `scripts/`: run (`run_native.sh`, `run_b.sh`, `run_c.sh`), continue, progress, export and recovery tools
 - `protocols/`: experiment substrate notes
 
 Fresh generation uses OpenCode v2 with either the direct DeepSeek API
@@ -20,3 +21,9 @@ Restore the public `data/` tree as a sibling of this directory before
 generating; the code resolves `data/` relative to this directory's parent.
 Runs create `analysis/`, `reports/`, `results/`, `runs/` and `logs/` here,
 and `.gitignore` keeps them out of Git.
+
+Condition C (`conditions/c/`) is feedback-assisted. It reads a frozen B generation
+plus that run's private scoring (produced outside this checkout) and repairs only the
+B-No questions in isolated OpenCode calls. Its three levels are nested:
+`c_minimal` (base, holds the core) ⊂ `c_single` (+ semantic audit) ⊂ `c_blind`
+(+ parent-blind contract). See [conditions/c/README.md](conditions/c/README.md).

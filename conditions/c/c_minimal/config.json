@@ -1,0 +1,35 @@
+{
+  "condition": "c_minimal",
+  "revision": "C-v6 minimal evidence-backed repair",
+  "source_policy": "minimal",
+  "extends": "frozen_b_parent",
+  "lineage": [
+    "c_minimal"
+  ],
+  "adds": "frozen-B packet, one repair call, validation and fallback (base level)",
+  "maximum_agent_calls_per_question": 1,
+  "requires_semantic_audit": false,
+  "prompt": "own (prompts are not inherited)",
+  "endpoint": "feedback-assisted",
+  "parent_condition": "b_v3_contrastive_grounding_selection",
+  "parent_rerun": false,
+  "granularity": "question-local repair over a frozen B capsule primary",
+  "capsule_count": 19,
+  "question_count": 78,
+  "locked": "B Yes (correct, accepted and resolved) is immutable",
+  "rescue_targets": "B No or non-compliant questions",
+  "feedback_payload": "per-question B yes/no from post-freeze scoring only",
+  "policy_retry": false,
+  "retry": false,
+  "multihead": false,
+  "selector": false,
+  "maximum_changed_dimensions": 3,
+  "requires_repair_code_persistence": true,
+  "fallback": "invalid, interrupted or abstaining repair keeps the frozen B result",
+  "agent": "opencode-v2 per-call Docker boundary",
+  "imports_allowed": [
+    "common",
+    "conditions.b",
+    "conditions.c.c_minimal"
+  ]
+}
