@@ -101,6 +101,16 @@ class RescueMainTests(unittest.TestCase):
         for artifact in output["freeze"]["artifacts"]:
             self.assertEqual(sha(ROOT / artifact["path"]), artifact["sha256"])
 
+    def test_execute_refuses_a_scoring_that_locks_nothing(self):
+        self.scoring.write_text(json.dumps({"status": "completed_posthoc_after_freeze", "verdicts": [
+            {"question_id": q, "present": False, "correct": False, "accepted": True, "resolved": False} for q in QIDS]}))
+        self.assertEqual(self.run_main()["b_answered"], 0)
+        agent = FakeAgent([])
+        with self.assertRaisesRegex(SystemExit, "locks no question"):
+            self.run_main("--execute", agent=agent)
+        self.assertEqual(agent.calls, [])
+        self.assertFalse((self.base / "c_run").exists())
+
     def test_execute_refuses_existing_output_or_nonempty_run_root(self):
         (self.base / "c_generation.json").write_text("{}")
         with self.assertRaises(SystemExit):

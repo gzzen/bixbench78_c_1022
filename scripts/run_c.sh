@@ -24,11 +24,10 @@ if [[ ! -f "$scoring" ]]; then
     echo "no B scoring at $scoring and no grader at $grader" >&2; echo "$usage" >&2; exit 2
   fi
   mkdir -p "results/${b_tag}"
-  if [[ ! -f "results/${b_tag}/b.jsonl" ]]; then
-    python scripts/export_predictions.py --generation "$generation" --condition b \
-      --output "results/${b_tag}/b.jsonl" --provenance "results/${b_tag}/b.provenance.json" \
-      --source-run "$b_tag"
-  fi
+  # Always re-export: a stale b.jsonl must never be scored.
+  python scripts/export_predictions.py --generation "$generation" --condition b \
+    --output "results/${b_tag}/b.jsonl" --provenance "results/${b_tag}/b.provenance.json" \
+    --source-run "$b_tag"
   python "$grader" --predictions "results/${b_tag}/b.jsonl" \
     --provenance "results/${b_tag}/b.provenance.json" --output "$scoring"
 fi
@@ -36,8 +35,15 @@ model_args=()
 [[ -n "${MODEL:-}" ]] && model_args+=(--model "$MODEL")
 [[ -n "${REASONING_EFFORT:-}" ]] && model_args+=(--repair-reasoning-effort "$REASONING_EFFORT")
 mkdir -p "logs/${b_tag}" "results/${b_tag}"
+extra_args=()
+[[ "${ALLOW_NO_LOCKED:-0}" == 1 ]] && extra_args+=(--allow-no-locked)
 for level in "${levels[@]}"; do
-  python "conditions/c/${level}/runner.py" --execute \
+  # Preflight (no model calls) shows how many B questions are answered and locked before any paid call.
+  python "conditions/c/${level}/runner.py" \
+    --parent-generation "$generation" --parent-scoring "$scoring" "${model_args[@]}" \
+    --run-root "runs/${b_tag}_${level}" --output "analysis/${b_tag}_${level}_generation.json" \
+    2>&1 | tee -a "logs/${b_tag}/${level}.log"
+  python "conditions/c/${level}/runner.py" --execute "${extra_args[@]}" \
     --parent-generation "$generation" --parent-scoring "$scoring" \
     --workers "${WORKERS:-2}" --timeout "${TIMEOUT:-3600}" "${model_args[@]}" \
     --run-root "runs/${b_tag}_${level}" \

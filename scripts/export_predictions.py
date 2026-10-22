@@ -6,8 +6,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from common.integrity.freeze import frozen_workspace  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -21,8 +27,6 @@ def load_json(path: Path) -> dict[str, Any]:
 def unresolved(question_id: str) -> dict[str, Any]:
     return {"question_id": question_id, "status": "unresolved", "candidates": []}
 
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_frozen(path: Path) -> dict[str, Any]:
@@ -41,16 +45,17 @@ def export_rows(generation: dict[str, Any], condition: str, source_run: str) -> 
     records = generation["records" if condition == "native" else "episodes"]
     rows: list[dict[str, Any]] = []
     for record in records:
-        workspace = Path(record["workspace"])
+        workspace = frozen_workspace(record["workspace"], ROOT)
         local_failures = record.get("question_local_failures") or {}
+        result_path = workspace / ("question_result.json" if condition == "native" else "capsule_result.json")
+        if record.get("accepted") and not result_path.is_file():
+            raise RuntimeError(f"accepted {condition} record has no frozen result: {result_path}")
         if condition == "native":
             question_ids = [record["question_id"]]
-            result_path = workspace / "question_result.json"
             payload = load_json(result_path) if result_path.is_file() else unresolved(question_ids[0])
             results = [payload]
         else:
             question_ids = list(record["question_ids"])
-            result_path = workspace / "capsule_result.json"
             payload = load_json(result_path) if result_path.is_file() else {"results": []}
             by_id = {
                 item.get("question_id"): item

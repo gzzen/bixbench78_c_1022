@@ -48,6 +48,8 @@ def main(condition: MinimalRepair) -> None:
     parser.add_argument("--model", help="default: the frozen B parent's model")
     parser.add_argument("--repair-reasoning-effort", help="default: the frozen B parent's reasoning effort")
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--allow-no-locked", action="store_true",
+                        help="execute even when the B scoring locks no question (normally a broken B export)")
     parser.add_argument("--limit", type=int, help="answer-blind pilot: first N B-No IDs in frozen order")
     parser.add_argument("--retry-failed-from", type=Path, help="new diagnostic revision, only prior controller failures; never reuse C answers")
     parser.add_argument("--workers", type=int, default=2)
@@ -84,6 +86,10 @@ def main(condition: MinimalRepair) -> None:
         selected = {r["question_id"] for r in previous["rescue"] if not r.get("accepted")}
     if args.limit is not None and args.limit < 1:
         raise ValueError("pilot limit must be positive")
+    b_answered = sum(bool(v.get("present", True)) for v in scoring["verdicts"])
+    if args.execute and not parent["locked_yes_question_ids"] and not args.allow_no_locked:
+        raise SystemExit(f"B scoring locks no question ({b_answered}/{len(scoring['verdicts'])} answered); "
+                         "check the B export and scoring, or pass --allow-no-locked")
     lineage = [name for name, _ in condition.lineage()]
     if not args.execute:
         eligible = [qid for qid in parent["rescue_question_ids"] if selected is None or qid in selected]
@@ -94,6 +100,7 @@ def main(condition: MinimalRepair) -> None:
             "level": condition.name, "lineage": lineage, "revision": condition.revision,
             "b3_rerun": False,
             "b3_question_count": len(scoring["verdicts"]),
+            "b_answered": b_answered,
             "locked_b3_yes": len(parent["locked_yes_question_ids"]),
             "c_rescue_targets": len(eligible),
             "max_agent_calls": len(eligible) * condition.max_calls_per_question,

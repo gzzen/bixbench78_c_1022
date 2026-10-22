@@ -45,14 +45,14 @@ class ParentTests(unittest.TestCase):
             item.stop()
         self.tmp.cleanup()
 
-    def write_generation(self, status="frozen_before_private_scoring", question_ids=QIDS):
+    def write_generation(self, status="frozen_before_private_scoring", question_ids=QIDS, workspace=None):
         artifacts = [{"path": str(p.relative_to(self.root)), "sha256": sha(p)} for p in
                      (self.workspace / "capsule_result.json", self.workspace / "analysis/scripts/run.py")]
         self.generation.parent.mkdir(parents=True, exist_ok=True)
         self.generation.write_text(json.dumps({
             "manifest": {"model": "deepseek/deepseek-flash", "reasoning_effort": "high"},
             "episodes": [{"short_id": "bix-1", "capsule_uuid": "cap-1", "question_ids": question_ids,
-                          "workspace": str(self.workspace), "accepted": True}],
+                          "workspace": workspace or str(self.workspace), "accepted": True}],
             "freeze": {"status": status, "manifest_sha256": "m", "artifacts": artifacts}}))
 
     def write_scoring(self, correct, accepted=None):
@@ -96,6 +96,23 @@ class ParentTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "different B generation"):
             self.load()
 
+    def test_run_tree_copied_from_another_checkout_reads_the_local_frozen_copy(self):
+        self.write_generation(workspace="/elsewhere/old_checkout/runs/b/0000/bix-1__cap-1")
+        generation, scoring, _ = self.load()
+        records, _ = parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal")
+        packet = Path(records[0][0]["workspace"])
+        self.assertEqual(json.loads((packet / "primary_canonical.json").read_text())["short_id"], "bix-1")
+        self.assertTrue((packet / "analysis/scripts/run.py").is_file())
+
+    def test_missing_workspace_or_accepted_result_fails_preflight(self):
+        self.write_generation(workspace="/elsewhere/old_checkout/runs/b/0000/bix-404__cap-1")
+        with self.assertRaisesRegex(RuntimeError, "frozen workspace not found"):
+            self.load()
+        self.write_generation()
+        (self.workspace / "capsule_result.json").unlink()
+        with self.assertRaises(RuntimeError):
+            self.load()
+
     def test_scoring_must_cover_the_generation_questions(self):
         self.write_generation(question_ids=QIDS[:2])
         with self.assertRaisesRegex(RuntimeError, "do not match"):
@@ -114,10 +131,13 @@ class ParentTests(unittest.TestCase):
         self.assertEqual(roles["analysis/scripts/run.py"], "B3 executed source")
         self.assertEqual(records[0][2], {"question_id": "bix-1-q2", "feedback": "no"})
 
-    def test_missing_b_result_becomes_unresolved_primary_with_identity(self):
+    def test_missing_result_of_failed_b_episode_becomes_unresolved_primary_with_identity(self):
         generation, scoring, _ = self.load()
         (self.workspace / "capsule_result.json").unlink()
-        records, _ = parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal", {"bix-1-q2"})
+        with self.assertRaisesRegex(RuntimeError, "accepted B episode has no frozen capsule_result"):
+            parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal", {"bix-1-q2"})
+        generation["episodes"][0]["accepted"] = False
+        records, _ = parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal_2", {"bix-1-q2"})
         primary = json.loads((Path(records[0][0]["workspace"]) / "primary_canonical.json").read_text())
         self.assertEqual((primary["capsule_uuid"], primary["short_id"]), ("cap-1", "bix-1"))
         self.assertTrue(all(item["status"] == "unresolved" for item in primary["results"]))
