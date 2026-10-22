@@ -71,20 +71,31 @@ Imports only go up the hierarchy: `c_blind` → `c_single` → `c_minimal` → `
 
 ## Run
 
-Prerequisites: a frozen B generation from `conditions/b/runner.py` and its private
-scoring (`status: completed_posthoc_after_freeze`, produced outside this checkout).
+Prerequisites: a frozen B generation from `conditions/b/runner.py` and its post-freeze
+scoring (`status: completed_posthoc_after_freeze`). `scripts/score_frozen_b.py` makes it:
+it verifies the B freeze hashes, then loads the judge and answer key from paths that must
+lie outside this checkout, and writes only verdict booleans plus file hashes. The scoring
+records `source_generation_sha256`; `load_parent` rejects it for any other B generation.
 
 ```bash
-# Preflight: no model calls; prints locked/target counts, model and default paths.
-python conditions/c/c_minimal/runner.py \
-  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
+# 1. Score frozen B -> analysis/<B_TAG>_scoring.json, reports/<B_TAG>_B_SCORING.md
+python scripts/score_frozen_b.py --generation analysis/<B_TAG>_generation.json \
+  --answers /path/to/answers_78.json --evaluator-dir /path/to/private_evaluator
 
-# One-question paid pilot with its own paths, then full runs + export:
+# 2. Preflight: no model calls; prints locked/target counts, model and default paths.
+python conditions/c/c_minimal/runner.py \
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
+
+# 3. One-question paid pilot with its own paths, then full runs + export:
 python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/c/pilot_c_minimal \
   --output analysis/pilot_c_minimal_generation.json --report reports/PILOT_C_MINIMAL.md \
-  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
-VERSION=all scripts/run_c.sh <B_TAG> <scoring.json>    # c_minimal, c_single, c_blind
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
+VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
 ```
+
+`run_c.sh B_TAG [SCORING_JSON]` uses `analysis/<B_TAG>_scoring.json` by default. If that
+file is missing and `ANSWERS` and `EVALUATOR_DIR` are set, it runs step 1 first. The C
+runners are started without those two variables.
 
 Model and effort default to the parent B manifest (B and C were matched historically);
 override with `--model` / `--repair-reasoning-effort`. All levels share
@@ -96,8 +107,8 @@ Tests (offline, from the checkout root):
 ```bash
 python -m unittest conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
-  conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_score_frozen_b \
+  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
 ```
 
 ## Differences from the Codex source

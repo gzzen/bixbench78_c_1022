@@ -43,6 +43,8 @@ def load_parent(generation_path: Path, scoring_path: Path, registry_path: Path) 
         raise RuntimeError("B generation is not frozen")
     if scoring.get("status") != "completed_posthoc_after_freeze":
         raise RuntimeError("B scoring is not complete")
+    if "source_generation_sha256" in scoring and scoring["source_generation_sha256"] != digest(generation_path):
+        raise RuntimeError("B scoring was made for a different B generation")
     for artifact in generation["freeze"]["artifacts"]:
         path = ROOT / artifact["path"]
         if artifact.get("sha256") and (not path.is_file() or digest(path) != artifact["sha256"]):

@@ -295,7 +295,7 @@ remain inaccessible during generation.
 
 ## Condition C: rescue over a frozen, scored B run
 
-C runs only after a B generation is frozen, exported and privately scored. It
+C runs only after a B generation is frozen and privately scored. It
 reads the scoring file's per-question `correct`/`accepted`/`resolved` booleans
 (never answers), keeps every B Yes, and gives each other question one repair in its
 own OpenCode attempt container. The levels are nested: `c_minimal` (1 call),
@@ -304,10 +304,19 @@ Model and effort default to the B run's manifest. A policy interruption keeps th
 answer; there is no retry.
 
 ```bash
-# After B: export, then score privately (outside this checkout) to <scoring.json>.
+# After B is frozen: score it. The key and judge stay outside this checkout; the
+# scorer verifies the freeze hashes before loading them and refuses paths inside it.
+python scripts/score_frozen_b.py --generation "analysis/${tag}_generation.json" \
+  --answers /path/to/private/answers_78.json --evaluator-dir /path/to/private_evaluator
+# -> analysis/${tag}_scoring.json (verdict booleans + hashes only) and reports/${tag}_B_SCORING.md
 python conditions/c/c_minimal/runner.py \
-  --parent-generation "analysis/${tag}_generation.json" --parent-scoring <scoring.json>   # preflight
-VERSION=all scripts/run_c.sh "$tag" <scoring.json>   # c_minimal, c_single, c_blind + export
+  --parent-generation "analysis/${tag}_generation.json" \
+  --parent-scoring "analysis/${tag}_scoring.json"   # preflight
+VERSION=all scripts/run_c.sh "$tag"   # c_minimal, c_single, c_blind + export
+# Or let run_c.sh score B first when analysis/${tag}_scoring.json is missing:
+ANSWERS=/path/to/answers_78.json EVALUATOR_DIR=/path/to/private_evaluator VERSION=all scripts/run_c.sh "$tag"
+# An explicit scoring JSON (e.g. from evaluation_private/score.py) still works:
+scripts/run_c.sh "$tag" <scoring.json>
 # Then score results/<tag>/<level>.jsonl privately, like Native/B.
 ```
 
@@ -372,8 +381,8 @@ python -m unittest common.integrity.test_opencode_capture \
   common.integrity.test_attempt_container common.integrity.test_controller_retry_policy \
   conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
-  conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_score_frozen_b \
+  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
 
 # Optional real CLI against a local fake model, with zero paid calls:
 NATIVE_B_TEST_OPENCODE_BINARY=/absolute/path/to/opencode \
