@@ -382,8 +382,8 @@ python -m unittest common.integrity.test_opencode_capture \
   common.integrity.test_attempt_container common.integrity.test_controller_retry_policy \
   conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
-  conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_pack_run_artifacts \
+  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
 
 # Optional real CLI against a local fake model, with zero paid calls:
 NATIVE_B_TEST_OPENCODE_BINARY=/absolute/path/to/opencode \

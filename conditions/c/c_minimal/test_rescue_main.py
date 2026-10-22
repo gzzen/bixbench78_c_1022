@@ -76,6 +76,14 @@ class RescueMainTests(unittest.TestCase):
         self.assertEqual((summary["model"], summary["reasoning_effort"]), ("deepseek/deepseek-flash", "high"))
         self.assertFalse((self.base / "c_run").exists())
 
+    def test_default_run_root_sits_directly_under_runs(self):
+        argv = ["runner.py", "--parent-generation", str(self.generation), "--parent-scoring", str(self.scoring),
+                "--parent-registry", str(self.base / "registry.json")]
+        stdout = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout):
+            rescue_main.main(MinimalRepair())
+        self.assertEqual(json.loads(stdout.getvalue())["run_root"], str(ROOT / "runs/tag_b_c_minimal"))
+
     def test_execute_freezes_protocol_snapshot_and_rescue(self):
         summary = self.run_main("--execute", agent=FakeAgent([repair_step(proposal())]))
         self.assertEqual((summary["c_rescue_targets"], summary["c_rescue_success"], summary["total_agent_calls"]), (1, 1, 1))

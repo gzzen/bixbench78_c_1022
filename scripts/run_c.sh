@@ -40,7 +40,7 @@ for level in "${levels[@]}"; do
   python "conditions/c/${level}/runner.py" --execute \
     --parent-generation "$generation" --parent-scoring "$scoring" \
     --workers "${WORKERS:-2}" --timeout "${TIMEOUT:-3600}" "${model_args[@]}" \
-    --run-root "runs/c/${b_tag}_${level}" \
+    --run-root "runs/${b_tag}_${level}" \
     --output "analysis/${b_tag}_${level}_generation.json" \
     --report "reports/${b_tag}_${level^^}_GENERATION.md" \
     2>&1 | tee -a "logs/${b_tag}/${level}.log"

@@ -89,7 +89,7 @@ python conditions/c/c_minimal/runner.py \
   --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
 
 # 3. One-question paid pilot with its own paths, then full runs + export:
-python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/c/pilot_c_minimal \
+python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/pilot_c_minimal \
   --output analysis/pilot_c_minimal_generation.json --report reports/PILOT_C_MINIMAL.md \
   --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
 VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
@@ -97,6 +97,15 @@ VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
 
 `run_c.sh B_TAG [SCORING_JSON]` uses `analysis/<B_TAG>_scoring.json` by default; if that
 file is missing it runs step 1 itself (export, then `../bixbench78_grader/score.py`).
+
+A C run lives next to its B parent, at `runs/<B_TAG>_<level>` (for example
+`runs/hard_isolated_<id>_b_c_minimal`), so `scripts/pack_run_artifacts.py <experiment_id>`
+and `cleanup_run_artifacts.py` pick it up with the B run. The archive includes C's run-root
+records (`protocol.json`, `prompt_snapshot.json`, `code_snapshot/`) and its
+`frozen_parent_packets/`, `repair_questions/` and `blind_contracts/` workspaces. C output is
+selected by B's private verdicts, so every C file is marked `feedback_assisted` in
+`PACK_MANIFEST.json`, and `answer_blind` is false whenever any is packed. Scoring files stay
+excluded as before.
 
 Model and effort default to the parent B manifest (B and C were matched historically);
 override with `--model` / `--repair-reasoning-effort`. All levels share
@@ -108,8 +117,8 @@ Tests (offline, from the checkout root):
 ```bash
 python -m unittest conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
-  conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_pack_run_artifacts \
+  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
 ```
 
 ## Differences from the Codex source

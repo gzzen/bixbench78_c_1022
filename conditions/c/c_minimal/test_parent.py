@@ -103,7 +103,7 @@ class ParentTests(unittest.TestCase):
 
     def test_packets_carry_frozen_evidence_but_not_audits(self):
         generation, scoring, _ = self.load()
-        records, targets = parent.make_packet_records(generation, scoring, self.root / "runs/c/x")
+        records, targets = parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal")
         self.assertEqual([t["question_id"] for t in targets], ["bix-1-q2", "bix-1-q3"])
         packet = Path(records[0][0]["workspace"])
         self.assertTrue((packet / "primary_canonical.json").is_file())
@@ -117,7 +117,7 @@ class ParentTests(unittest.TestCase):
     def test_missing_b_result_becomes_unresolved_primary_with_identity(self):
         generation, scoring, _ = self.load()
         (self.workspace / "capsule_result.json").unlink()
-        records, _ = parent.make_packet_records(generation, scoring, self.root / "runs/c/x", {"bix-1-q2"})
+        records, _ = parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal", {"bix-1-q2"})
         primary = json.loads((Path(records[0][0]["workspace"]) / "primary_canonical.json").read_text())
         self.assertEqual((primary["capsule_uuid"], primary["short_id"]), ("cap-1", "bix-1"))
         self.assertTrue(all(item["status"] == "unresolved" for item in primary["results"]))
@@ -126,7 +126,7 @@ class ParentTests(unittest.TestCase):
         generation, scoring, _ = self.load()
         (self.workspace / "analysis/scripts/extra.py").write_text("print(3)\n")
         with self.assertRaisesRegex(RuntimeError, "parent source not frozen"):
-            parent.make_packet_records(generation, scoring, self.root / "runs/c/x")
+            parent.make_packet_records(generation, scoring, self.root / "runs/tag_c_minimal")
 
 
 class GraderIsolationTests(unittest.TestCase):

@@ -61,7 +61,7 @@ def main(condition: MinimalRepair) -> None:
     scoring_path = args.parent_scoring.resolve()
     tag = parent_tag(generation_path)
     registry_path = (args.parent_registry or ROOT / f"analysis/{tag}_c_parent.json").resolve()
-    run_root = (args.run_root or ROOT / f"runs/c/{tag}_{condition.name}").resolve()
+    run_root = (args.run_root or ROOT / f"runs/{tag}_{condition.name}").resolve()
     output = (args.output or ROOT / f"analysis/{tag}_{condition.name}_generation.json").resolve()
     report = (args.report or ROOT / f"reports/{tag}_{condition.name.upper()}_GENERATION.md").resolve()
 
