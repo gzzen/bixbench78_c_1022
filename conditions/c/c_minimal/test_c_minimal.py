@@ -51,6 +51,9 @@ class MinimalRepairTests(unittest.TestCase):
         self.assertIn("analysis/scripts/b.py", files, "frozen B scripts are handed to the repair workspace")
         self.assertNotIn("semantic_audit", repair)
         self.assertIsNone(repair["blind_workspace"])
+        workspace = Path(repair["workspace"])
+        self.assertEqual((workspace.parent.name, workspace.name), ("repair_questions", "bix-1-q2__cap-1"),
+                         "one flat workspace per question, named like B's")
 
     def test_no_semantic_audit_is_required(self):
         repair, _, files = self.run_minimal([repair_step(proposal(), audit=False)])

@@ -55,9 +55,9 @@ Imports only go up the hierarchy: `c_blind` → `c_single` → `c_minimal` → `
 
 ## Per-question pipeline (`MinimalRepair.run_question`)
 
-1. Fresh `repair_questions/<qid>/` workspace with `question_only.json` and capsule `data/`.
+1. Fresh `repair_questions/<qid>__<capsule_uuid>/` workspace with `question_only.json` and capsule `data/`.
 2. Hook `pre_repair`: nothing in c_minimal/c_single. In c_blind, a separate
-   `blind_contracts/<qid>/` call with no parent artifacts produces the contract; it must
+   `blind_contracts/<qid>__<capsule_uuid>/` call with no parent artifacts produces the contract; it must
    quote the question verbatim. Failure → repair skipped, B kept.
 3. Hand over frozen B evidence: `repair_packet.json` (B answer, verdict `no`, controller
    diagnostics), `primary_*.json`, B `analysis/scripts/`, small intermediate tables.

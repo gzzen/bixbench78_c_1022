@@ -105,33 +105,27 @@ def contract_step(payload, **extra) -> dict:
     return {"events": [text(payload)], **extra}
 
 
-def fake_prepare(arm, run_root, rows):
-    workspace = run_root / arm / f"{rows[0]['short_id']}__{rows[0]['capsule_uuid']}"
+def fake_materialize(workspace, rows, environment):
     workspace.mkdir(parents=True)
-    return workspace, None
 
 
 @contextlib.contextmanager
-def offline(agent: FakeAgent, *extra_modules):
-    """Patch the Docker/OpenCode call, workspace materialization and B grounding schema check.
-
-    ``extra_modules`` are higher-level modules that import ``prepare_workspace`` themselves.
-    """
+def offline(agent: FakeAgent):
+    """Patch the Docker/OpenCode call, capsule data materialization and B grounding schema check."""
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch.object(agent_call, "run_agent", agent))
-        stack.enter_context(patch.object(pipeline, "prepare_workspace", fake_prepare))
+        stack.enter_context(patch.object(pipeline, "materialize_common_native_inputs", fake_materialize))
+        stack.enter_context(patch.object(pipeline, "environment_manifest", lambda: {"values": {}}))
         stack.enter_context(patch.object(pipeline.b_runner, "grounding_record", lambda ws, rows: {"checked": "yes"}))
-        for module in extra_modules:
-            stack.enter_context(patch.object(module, "prepare_workspace", fake_prepare))
         yield
 
 
-def run_repair(condition, steps, *extra_modules) -> tuple[dict, FakeAgent, dict]:
+def run_repair(condition, steps) -> tuple[dict, FakeAgent, dict]:
     """Run one question through ``condition`` offline; returns (repair record, agent, saved workspace files)."""
     agent = FakeAgent(steps)
     with tempfile.TemporaryDirectory() as value:
         root = Path(value)
-        with offline(agent, *extra_modules):
+        with offline(agent):
             repair = condition.run_question(make_record(root), ROW, FEEDBACK, root, 60)
         workspace = Path(repair["workspace"])
         files = {path.relative_to(workspace).as_posix(): path.read_text()

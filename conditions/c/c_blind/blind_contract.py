@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from common.benchmark.a84_contract import sha256_file, write_json
-from common.integrity.capsule_workspace import prepare_workspace
 from common.integrity.isolation_audit import audit_events_v121
 from common.integrity.opencode_capture import generation_failure, write_result
-from conditions.c.c_minimal import agent_call
+from conditions.c.c_minimal import agent_call, pipeline
 from conditions.c.c_minimal.pipeline import PreRepairOutcome
 from conditions.c.c_single.semantic_audit import FIELDS
 from conditions.c.c_blind.prompts import BLIND_CONTRACT_PROMPT
@@ -32,7 +31,7 @@ def validate_contract(payload, row):
 def run_blind_contract(row: Mapping[str, Any], run_root: Path, timeout: int) -> PreRepairOutcome:
     """Truly blind first phase: no parent artifacts exist in this workspace."""
     qid = row["question_id"]
-    blind_workspace, _ = prepare_workspace(qid, run_root / "blind_contracts", [dict(row)])
+    blind_workspace = pipeline.question_workspace(run_root / "blind_contracts", row)
     write_json(blind_workspace / "question_only.json", dict(row))
     call = agent_call.run_agent(BLIND_CONTRACT_PROMPT, CONTRACT_SCHEMA, blind_workspace,
                                 f"C/c_blind/{qid}/contract", timeout)

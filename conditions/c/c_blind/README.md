@@ -6,7 +6,7 @@ required), with its own repair prompt (`QUESTION_REPAIR_PROMPT`) and one added s
 before the repair:
 
 - **Blind contract** (`blind_contract.py`, `BLIND_CONTRACT_PROMPT`): a separate
-  `blind_contracts/<qid>/` workspace with only `question_only.json` and capsule data. It
+  `blind_contracts/<qid>__<capsule_uuid>/` workspace with only `question_only.json` and capsule data. It
   returns the seven-field contract (`semantic_contract.schema.json`); every
   `explicit_constraints` entry must be a verbatim span of the question. The contract is
   handed to the repair as `blind_contract.json`. Failure → repair skipped, B kept.
