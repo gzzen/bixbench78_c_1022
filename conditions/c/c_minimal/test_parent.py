@@ -87,6 +87,15 @@ class ParentTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not frozen"):
             self.load()
 
+    def test_scoring_bound_to_another_generation_is_rejected(self):
+        scoring = json.loads(self.scoring.read_text())
+        self.scoring.write_text(json.dumps({**scoring, "source_generation_sha256": sha(self.generation)}))
+        self.assertEqual(self.load()[2]["locked_yes_question_ids"], ["bix-1-q1"])
+        self.registry.unlink()
+        self.scoring.write_text(json.dumps({**scoring, "source_generation_sha256": "0" * 64}))
+        with self.assertRaisesRegex(RuntimeError, "different B generation"):
+            self.load()
+
     def test_scoring_must_cover_the_generation_questions(self):
         self.write_generation(question_ids=QIDS[:2])
         with self.assertRaisesRegex(RuntimeError, "do not match"):
@@ -118,6 +127,16 @@ class ParentTests(unittest.TestCase):
         (self.workspace / "analysis/scripts/extra.py").write_text("print(3)\n")
         with self.assertRaisesRegex(RuntimeError, "parent source not frozen"):
             parent.make_packet_records(generation, scoring, self.root / "runs/c/x")
+
+
+class GraderIsolationTests(unittest.TestCase):
+    def test_generation_code_never_references_the_grader_or_answer_key(self):
+        root = Path(__file__).resolve().parents[3]
+        needles = ("bixbench78_grader", "answers_78", "yes_no_open_evaluator")
+        offenders = [str(path.relative_to(root)) for top in ("conditions", "common")
+                     for path in (root / top).rglob("*.py") if not path.name.startswith("test_")
+                     and any(needle in path.read_text(encoding="utf-8") for needle in needles)]
+        self.assertEqual(offenders, [])
 
 
 if __name__ == "__main__":

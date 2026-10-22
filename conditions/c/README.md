@@ -72,15 +72,17 @@ Imports only go up the hierarchy: `c_blind` → `c_single` → `c_minimal` → `
 ## Run
 
 Prerequisites: a frozen B generation from `conditions/b/runner.py` and its post-freeze
-scoring (`status: completed_posthoc_after_freeze`). `scripts/score_frozen_b.py` makes it:
-it verifies the B freeze hashes, then loads the judge and answer key from paths that must
-lie outside this checkout, and writes only verdict booleans plus file hashes. The scoring
-records `source_generation_sha256`; `load_parent` rejects it for any other B generation.
+scoring (`status: completed_posthoc_after_freeze`). This checkout never grades: the private
+sibling repository `../bixbench78_grader/` holds the answer key and scores the exported B
+predictions (DeepSeek for `llm_verifier` questions). Its output records the B generation's
+`source_generation_sha256`; `load_parent` rejects a scoring made for any other B generation.
 
 ```bash
-# 1. Score frozen B -> analysis/<B_TAG>_scoring.json, reports/<B_TAG>_B_SCORING.md
-python scripts/score_frozen_b.py --generation analysis/<B_TAG>_generation.json \
-  --answers /path/to/answers_78.json --evaluator-dir /path/to/private_evaluator
+# 1. Export frozen B and have the sibling grader score it -> analysis/<B_TAG>_scoring.json
+python scripts/export_predictions.py --generation analysis/<B_TAG>_generation.json --condition b \
+  --output results/<B_TAG>/b.jsonl --provenance results/<B_TAG>/b.provenance.json --source-run <B_TAG>
+python ../bixbench78_grader/score.py --predictions results/<B_TAG>/b.jsonl \
+  --provenance results/<B_TAG>/b.provenance.json --output analysis/<B_TAG>_scoring.json
 
 # 2. Preflight: no model calls; prints locked/target counts, model and default paths.
 python conditions/c/c_minimal/runner.py \
@@ -93,9 +95,8 @@ python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/c/pi
 VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
 ```
 
-`run_c.sh B_TAG [SCORING_JSON]` uses `analysis/<B_TAG>_scoring.json` by default. If that
-file is missing and `ANSWERS` and `EVALUATOR_DIR` are set, it runs step 1 first. The C
-runners are started without those two variables.
+`run_c.sh B_TAG [SCORING_JSON]` uses `analysis/<B_TAG>_scoring.json` by default; if that
+file is missing it runs step 1 itself (export, then `../bixbench78_grader/score.py`).
 
 Model and effort default to the parent B manifest (B and C were matched historically);
 override with `--model` / `--repair-reasoning-effort`. All levels share
@@ -107,8 +108,8 @@ Tests (offline, from the checkout root):
 ```bash
 python -m unittest conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_score_frozen_b \
-  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
+  conditions.c.c_blind.test_c_blind
 ```
 
 ## Differences from the Codex source

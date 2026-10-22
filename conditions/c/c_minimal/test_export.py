@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.export_predictions import c_rows
+from scripts.export_predictions import c_rows, load_frozen
 from conditions.c.c_minimal.test_support import result
 
 
@@ -65,6 +65,17 @@ class CExportTests(unittest.TestCase):
         self.parent.write_text(self.parent.read_text() + " ")
         with self.assertRaisesRegex(RuntimeError, "hash mismatch"):
             c_rows(self.generation, "run")
+
+    def test_export_refuses_a_changed_frozen_artifact(self):
+        artifact = Path(self.tmp.name) / "b/bix-1/capsule_result.json"
+        generation = json.loads(self.parent.read_text())
+        generation["freeze"]["artifacts"] = [
+            {"path": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}]
+        self.parent.write_text(json.dumps(generation))
+        self.assertEqual(load_frozen(self.parent)["episodes"][0]["short_id"], "bix-1")
+        artifact.write_text(artifact.read_text() + " ")
+        with self.assertRaisesRegex(RuntimeError, "frozen artifact changed"):
+            load_frozen(self.parent)
 
 
 if __name__ == "__main__":

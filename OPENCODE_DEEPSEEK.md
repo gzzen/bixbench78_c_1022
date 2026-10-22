@@ -283,15 +283,18 @@ python scripts/export_predictions.py \
   --provenance "results/${experiment_id}/native_rep01.provenance.json" \
   --source-run "${experiment_id}_native_rep01"
 
-# Run only after freeze, in the private evaluation environment:
-python evaluator/score.py \
+# Run only after freeze. The private sibling repository holds the answer key and
+# grades llm_verifier questions with DeepSeek (see its README):
+python ../bixbench78_grader/score.py \
   --predictions "results/${experiment_id}/native_rep01.jsonl" \
-  --answers evaluator/private/answers_78.json \
+  --provenance "results/${experiment_id}/native_rep01.provenance.json" \
   --output "results/${experiment_id}/native_rep01_scoring.json"
 ```
 
-Repeat export/scoring for B and each replicate. The scorer and answer key must
-remain inaccessible during generation.
+Repeat export/scoring for B and each replicate. This checkout never reads the answer
+key or grades anything; attempt containers mount only their own workspace and capsule
+data, so the sibling grader is never visible during generation. Export refuses a
+generation that is not frozen or whose frozen artifacts changed.
 
 ## Condition C: rescue over a frozen, scored B run
 
@@ -304,20 +307,18 @@ Model and effort default to the B run's manifest. A policy interruption keeps th
 answer; there is no retry.
 
 ```bash
-# After B is frozen: score it. The key and judge stay outside this checkout; the
-# scorer verifies the freeze hashes before loading them and refuses paths inside it.
-python scripts/score_frozen_b.py --generation "analysis/${tag}_generation.json" \
-  --answers /path/to/private/answers_78.json --evaluator-dir /path/to/private_evaluator
-# -> analysis/${tag}_scoring.json (verdict booleans + hashes only) and reports/${tag}_B_SCORING.md
+# After B is frozen: export it and have the sibling grader score it.
+python scripts/export_predictions.py --generation "analysis/${tag}_generation.json" --condition b \
+  --output "results/${tag}/b.jsonl" --provenance "results/${tag}/b.provenance.json" --source-run "$tag"
+python ../bixbench78_grader/score.py --predictions "results/${tag}/b.jsonl" \
+  --provenance "results/${tag}/b.provenance.json" --output "analysis/${tag}_scoring.json"
 python conditions/c/c_minimal/runner.py \
   --parent-generation "analysis/${tag}_generation.json" \
   --parent-scoring "analysis/${tag}_scoring.json"   # preflight
 VERSION=all scripts/run_c.sh "$tag"   # c_minimal, c_single, c_blind + export
-# Or let run_c.sh score B first when analysis/${tag}_scoring.json is missing:
-ANSWERS=/path/to/answers_78.json EVALUATOR_DIR=/path/to/private_evaluator VERSION=all scripts/run_c.sh "$tag"
-# An explicit scoring JSON (e.g. from evaluation_private/score.py) still works:
-scripts/run_c.sh "$tag" <scoring.json>
-# Then score results/<tag>/<level>.jsonl privately, like Native/B.
+# run_c.sh does the export and grader call itself when analysis/${tag}_scoring.json is
+# missing; an explicit scoring JSON also works: scripts/run_c.sh "$tag" <scoring.json>
+# Then score results/<tag>/<level>.jsonl with ../bixbench78_grader/score.py, like Native/B.
 ```
 
 All levels on one B run share `analysis/<tag>_c_parent.json`, so they repair the same
@@ -381,8 +382,8 @@ python -m unittest common.integrity.test_opencode_capture \
   common.integrity.test_attempt_container common.integrity.test_controller_retry_policy \
   conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_score_frozen_b \
-  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
+  conditions.c.c_blind.test_c_blind
 
 # Optional real CLI against a local fake model, with zero paid calls:
 NATIVE_B_TEST_OPENCODE_BINARY=/absolute/path/to/opencode \

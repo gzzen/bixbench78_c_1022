@@ -29,6 +29,11 @@ def load_frozen(path: Path) -> dict[str, Any]:
     generation = load_json(path)
     if generation.get("freeze", {}).get("status") != "frozen_before_private_scoring":
         raise RuntimeError("generation is not frozen before private scoring")
+    changed = [artifact["path"] for artifact in generation["freeze"].get("artifacts", [])
+               if artifact.get("sha256") and (not (ROOT / artifact["path"]).is_file()
+                                              or sha256(ROOT / artifact["path"]) != artifact["sha256"])]
+    if changed:
+        raise RuntimeError(f"frozen artifact changed: {changed[:3]}")
     return generation
 
 
