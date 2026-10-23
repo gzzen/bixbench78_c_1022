@@ -37,6 +37,22 @@ def protocol_sources(condition: MinimalRepair) -> list[Path]:
     return files + CONTROLLER_SOURCES
 
 
+def finished_repair(run_root: Path, qid: str) -> dict | None:
+    """The saved record of a question an earlier, interrupted run finished; None if it did not finish.
+
+    ``run_manifest.json`` is written last, after ``final_result.json``, so a readable manifest
+    marks a finished question.
+    """
+    for manifest in sorted((run_root / "repair_questions" / qid).glob("*/run_manifest.json")):
+        try:
+            record = json.loads(manifest.read_text(encoding="utf-8"))
+            record["final_result"] = json.loads((manifest.parent / "final_result.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return record
+    return None
+
+
 def main(condition: MinimalRepair) -> None:
     parser = argparse.ArgumentParser(description=f"{condition.revision}: question-local rescue over a frozen B parent")
     parser.add_argument("--parent-generation", type=Path, required=True,
@@ -48,6 +64,8 @@ def main(condition: MinimalRepair) -> None:
     parser.add_argument("--model", help="default: the frozen B parent's model")
     parser.add_argument("--repair-reasoning-effort", help="default: the frozen B parent's reasoning effort")
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--resume", action="store_true",
+                        help="continue an interrupted run in --run-root: keep finished questions, redo unfinished ones")
     parser.add_argument("--allow-no-locked", action="store_true",
                         help="execute even when the B scoring locks no question (normally a broken B export)")
     parser.add_argument("--limit", type=int, help="answer-blind pilot: first N B-No IDs in frozen order")
@@ -74,8 +92,8 @@ def main(condition: MinimalRepair) -> None:
     agent = agent_manifest(agent_call.MODEL, agent_call.REASONING_EFFORT)  # validates model/effort before any call
     if not 1 <= args.workers <= 19:
         raise SystemExit("workers must be between 1 and 19")
-    if args.execute and run_root.exists() and any(run_root.iterdir()):
-        raise SystemExit("refusing nonempty C rescue run root")
+    if args.execute and not args.resume and run_root.exists() and any(run_root.iterdir()):
+        raise SystemExit("refusing nonempty C rescue run root (pass --resume to continue it)")
     if args.execute and output.exists():
         raise SystemExit("refusing to overwrite an existing C generation output")
     selected = None
@@ -104,6 +122,7 @@ def main(condition: MinimalRepair) -> None:
             "locked_b3_yes": len(parent["locked_yes_question_ids"]),
             "c_rescue_targets": len(eligible),
             "max_agent_calls": len(eligible) * condition.max_calls_per_question,
+            "finished_in_run_root": sum(finished_repair(run_root, qid) is not None for qid in eligible),
             "model": agent_call.MODEL, "reasoning_effort": agent_call.REASONING_EFFORT,
             "workers": args.workers,
             "run_root": str(run_root), "output": str(output),
@@ -137,16 +156,38 @@ def main(condition: MinimalRepair) -> None:
         "interpretation": "developmental single revision, not causal superiority evidence",
         "repair_prompt_sha256": hashlib.sha256(condition.repair_prompt.encode()).hexdigest(),
         "sources": [{"path": str(p.relative_to(ROOT)), "sha256": digest(p)} for p in sources]}
-    write_json(run_root / "protocol.json", protocol)
+    protocol_path = run_root / "protocol.json"
+    if protocol_path.is_file():
+        # Resuming: the finished questions ran under this protocol, so the rest must too.
+        previous = json.loads(protocol_path.read_text(encoding="utf-8"))
+        differing = sorted(key for key in set(previous) | set(protocol)
+                           if key != "workers" and previous.get(key) != protocol.get(key))
+        if differing:
+            raise SystemExit(f"cannot resume {run_root}: protocol differs from the interrupted run in {differing}")
+        protocol = previous
+    else:
+        write_json(protocol_path, protocol)
     write_json(run_root / "prompt_snapshot.json", {"prompt": condition.repair_prompt})
     for path in sources:
         destination = run_root / "code_snapshot" / path.relative_to(ROOT)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
-    progress_log(f"C/{condition.name}", f"rescue targets={len(records)} locked={len(parent['locked_yes_question_ids'])} workers={args.workers}")
+    finished = {row["question_id"]: done for _, row, _ in records
+                if (done := finished_repair(run_root, row["question_id"])) is not None}
+    progress_log(f"C/{condition.name}", f"rescue targets={len(records)} finished={len(finished)} "
+                 f"locked={len(parent['locked_yes_question_ids'])} workers={args.workers}")
+
+    def repair(item):
+        qid = item[1]["question_id"]
+        if qid in finished:
+            return finished[qid]
+        # An unfinished question restarts from nothing; its partial workspaces are discarded.
+        for stage in ("repair_questions", "blind_contracts"):
+            shutil.rmtree(run_root / stage / qid, ignore_errors=True)
+        return condition.run_question(item[0], item[1], item[2], run_root, args.timeout)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.workers, len(records))) as pool:
-        repairs = list(pool.map(lambda item: condition.run_question(
-            item[0], item[1], item[2], run_root, args.timeout), records))
+        repairs = list(pool.map(repair, records))
     success = sum(bool(item.get("accepted")) and not item.get("fallback_to_primary") for item in repairs)
     final = {
         "level": condition.name,
@@ -166,6 +207,7 @@ def main(condition: MinimalRepair) -> None:
             "usage": {key: sum(r.get("usage", {}).get(key, 0) for r in repairs)
                       for key in {k for r in repairs for k in r.get("usage", {})}},
             "wall_runtime_seconds": time.monotonic() - started,
+            "resumed_finished_questions": len(finished),
             "scorer_or_evaluator_used_during_generation": False,
         },
         "freeze": {"status": "frozen_before_private_scoring", "parent_generation_sha256": parent["parent_generation_sha256"], "parent_scoring_sha256": parent["parent_scoring_sha256"],

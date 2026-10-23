@@ -316,8 +316,9 @@ python conditions/c/c_minimal/runner.py \
   --parent-generation "analysis/${tag}_generation.json" \
   --parent-scoring "analysis/${tag}_scoring.json"   # preflight
 VERSION=all scripts/run_c.sh "$tag"   # c_minimal, c_single, c_blind + export
-# run_c.sh re-exports and re-scores B, rebuilds the parent registry and overwrites the C
-# levels' runs and outputs every time; scripts/run_c.sh "$tag" <scoring.json> skips re-scoring.
+# Rerunning it reports completed levels, continues interrupted ones (finished questions are kept)
+# and starts the rest. B is re-scored only while no C level has started; FRESH=1 redoes the
+# selected levels; scripts/run_c.sh "$tag" <scoring.json> skips re-scoring.
 # Then score results/<tag>/<level>.jsonl with ../bixbench78_grader/score.py, like Native/B.
 ```
 

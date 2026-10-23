@@ -121,6 +121,34 @@ class RescueMainTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.run_main("--execute")
 
+    def test_resume_keeps_finished_questions_and_redoes_unfinished_ones(self):
+        self.run_main("--execute", agent=FakeAgent([repair_step(proposal())]))
+        output = self.base / "c_generation.json"
+        first = json.loads(output.read_text())
+        output.unlink()   # interrupted after the question finished, before the freeze
+        with self.assertRaisesRegex(SystemExit, "--resume"):
+            self.run_main("--execute")
+        self.assertEqual(self.run_main(agent=FakeAgent([]))["finished_in_run_root"], 1)
+        agent = FakeAgent([])
+        summary = self.run_main("--execute", "--resume", agent=agent)
+        self.assertEqual((agent.calls, summary["resumed_finished_questions"], summary["c_rescue_success"]), ([], 1, 1))
+        self.assertEqual(json.loads(output.read_text())["rescue"], first["rescue"])
+
+        output.unlink()   # interrupted in the middle of the question: it restarts in a clean workspace
+        manifest, = (self.base / "c_run/repair_questions/bix-1-q2").glob("*/run_manifest.json")
+        manifest.unlink()
+        agent = FakeAgent([repair_step(proposal())])
+        summary = self.run_main("--execute", "--resume", agent=agent)
+        self.assertEqual((len(agent.calls), summary["resumed_finished_questions"]), (1, 0))
+        for artifact in json.loads(output.read_text())["freeze"]["artifacts"]:
+            self.assertEqual(sha(ROOT / artifact["path"]), artifact["sha256"])
+
+        output.unlink()
+        protocol = self.base / "c_run/protocol.json"
+        protocol.write_text(json.dumps({**json.loads(protocol.read_text()), "timeout_per_phase": 1}))
+        with self.assertRaisesRegex(SystemExit, "timeout_per_phase"):
+            self.run_main("--execute", "--resume")
+
 
 if __name__ == "__main__":
     unittest.main()

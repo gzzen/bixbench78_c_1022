@@ -95,10 +95,15 @@ python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/pilo
 VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
 ```
 
-`run_c.sh B_TAG [SCORING_JSON]` starts from scratch every time: it re-exports B, re-scores it
-with `../bixbench78_grader/score.py` (overwriting `analysis/<B_TAG>_scoring.json`; skipped when
-`SCORING_JSON` is given), rebuilds the parent registry, and deletes the selected levels' run
-trees and outputs before running them.
+`run_c.sh B_TAG [SCORING_JSON]` picks up where things stand. A level whose generation exists is
+reported as completed and skipped. An interrupted level continues in its run root with
+`--resume`: questions that finished (their `run_manifest.json` was written) are kept, unfinished
+ones restart in clean workspaces, and the protocol must match the interrupted run's (code, prompt,
+model, effort, timeout, targets). A level not yet started runs from scratch. While no level of the
+B run has started, B is re-exported and re-scored with `../bixbench78_grader/score.py` (skipped
+when `SCORING_JSON` is given) and the parent registry is rebuilt; once one has started, that
+scoring and registry are reused, since the started runs are bound to them. `FRESH=1` deletes the
+selected levels' runs and outputs first.
 
 A C run lives next to its B parent, at `runs/<B_TAG>_<level>` (for example
 `runs/hard_isolated_<id>_b_c_minimal`), so `scripts/pack_run_artifacts.py <experiment_id>`
@@ -112,7 +117,7 @@ excluded as before.
 Model and effort default to the parent B manifest (B and C were matched historically);
 override with `--model` / `--repair-reasoning-effort`. All levels share
 `analysis/<B_TAG>_c_parent.json`, so they repair exactly the same questions.
-`--execute` refuses a nonempty run root or an existing output file.
+`--execute` refuses an existing output file, and a nonempty run root unless `--resume` is given.
 
 Tests (offline, from the checkout root):
 
