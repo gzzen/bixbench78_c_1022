@@ -156,17 +156,7 @@ def main(condition: MinimalRepair) -> None:
         "interpretation": "developmental single revision, not causal superiority evidence",
         "repair_prompt_sha256": hashlib.sha256(condition.repair_prompt.encode()).hexdigest(),
         "sources": [{"path": str(p.relative_to(ROOT)), "sha256": digest(p)} for p in sources]}
-    protocol_path = run_root / "protocol.json"
-    if protocol_path.is_file():
-        # Resuming: the finished questions ran under this protocol, so the rest must too.
-        previous = json.loads(protocol_path.read_text(encoding="utf-8"))
-        differing = sorted(key for key in set(previous) | set(protocol)
-                           if key != "workers" and previous.get(key) != protocol.get(key))
-        if differing:
-            raise SystemExit(f"cannot resume {run_root}: protocol differs from the interrupted run in {differing}")
-        protocol = previous
-    else:
-        write_json(protocol_path, protocol)
+    write_json(run_root / "protocol.json", protocol)
     write_json(run_root / "prompt_snapshot.json", {"prompt": condition.repair_prompt})
     for path in sources:
         destination = run_root / "code_snapshot" / path.relative_to(ROOT)

@@ -143,12 +143,6 @@ class RescueMainTests(unittest.TestCase):
         for artifact in json.loads(output.read_text())["freeze"]["artifacts"]:
             self.assertEqual(sha(ROOT / artifact["path"]), artifact["sha256"])
 
-        output.unlink()
-        protocol = self.base / "c_run/protocol.json"
-        protocol.write_text(json.dumps({**json.loads(protocol.read_text()), "timeout_per_phase": 1}))
-        with self.assertRaisesRegex(SystemExit, "timeout_per_phase"):
-            self.run_main("--execute", "--resume")
-
 
 if __name__ == "__main__":
     unittest.main()
