@@ -92,10 +92,10 @@ python conditions/c/c_minimal/runner.py \
 python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/pilot_c_minimal \
   --output analysis/pilot_c_minimal_generation.json --report reports/PILOT_C_MINIMAL.md \
   --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
-VERSION=all scripts/run_c.sh <B_TAG>    # c_minimal, c_single, c_blind
+scripts/run_c.sh <B_TAG> all    # c_minimal, c_single, c_blind
 ```
 
-`run_c.sh B_TAG [SCORING_JSON]` picks up where things stand. A level whose generation exists is
+`run_c.sh B_TAG [VERSION] [SCORING_JSON]` (VERSION defaults to `c_minimal`) picks up where things stand. A level whose generation exists is
 reported as completed and skipped. An interrupted level continues in its run root with
 `--resume`: of the rescue targets in the B scoring, those that finished (their
 `run_manifest.json` was written) are kept and the rest restart in clean workspaces. A level not

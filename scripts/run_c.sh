@@ -4,7 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 grader="../bixbench78_grader/score.py"   # private sibling repository; this checkout never grades
-usage="Usage: scripts/run_c.sh B_TAG [SCORING_JSON]   (B_TAG as in analysis/<B_TAG>_generation.json)
+usage="Usage: scripts/run_c.sh B_TAG [VERSION] [SCORING_JSON]   (B_TAG as in analysis/<B_TAG>_generation.json)
+VERSION is c_minimal (default), c_single, c_blind or all.
 Completed levels are reported and skipped, an interrupted level continues where it stopped
 (finished questions are kept), and a level not yet started runs from scratch. B is exported and
 scored by the sibling grader only while no C level of this B run has started (unless SCORING_JSON
@@ -13,12 +14,12 @@ FRESH=1 deletes the selected levels' runs and outputs first."
 b_tag="${1:?$usage}"
 [[ "$b_tag" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "invalid B_TAG" >&2; exit 2; }
 generation="analysis/${b_tag}_generation.json"
-version="${VERSION:-c_minimal}"
+version="${2:-c_minimal}"
 all_levels=(c_minimal c_single c_blind)
 case "$version" in
   all) levels=("${all_levels[@]}") ;;
   c_minimal|c_single|c_blind) levels=("$version") ;;
-  *) echo "VERSION must be c_minimal, c_single, c_blind or all" >&2; exit 2 ;;
+  *) echo "VERSION must be c_minimal, c_single, c_blind or all; got '$version'" >&2; exit 2 ;;
 esac
 [[ -f "$generation" ]] || { echo "no frozen B generation at $generation" >&2; exit 2; }
 
@@ -57,13 +58,13 @@ fi
 
 any_started=0
 for level in "${all_levels[@]}"; do started "$level" && any_started=1; done
-if [[ $# -ge 2 ]]; then
-  scoring="$2"
+if [[ $# -ge 3 ]]; then
+  scoring="$3"
   [[ -f "$scoring" ]] || { echo "no B scoring at $scoring" >&2; exit 2; }
 else
   scoring="analysis/${b_tag}_scoring.json"
   if (( any_started )); then
-    [[ -f "$scoring" ]] || { echo "C has started for ${b_tag} but $scoring is missing; rerun with FRESH=1 (VERSION=all)" >&2; exit 2; }
+    [[ -f "$scoring" ]] || { echo "C has started for ${b_tag} but $scoring is missing; rerun as FRESH=1 scripts/run_c.sh ${b_tag} all" >&2; exit 2; }
     echo "Reusing $scoring: C runs of ${b_tag} already started against it."
   else
     [[ -f "$grader" ]] || { echo "no grader at $grader" >&2; exit 2; }
