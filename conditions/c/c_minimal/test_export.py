@@ -8,7 +8,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.export_predictions import c_rows
+from unittest.mock import patch
+
+from scripts import export_predictions
+from scripts.export_predictions import c_rows, export_rows, load_frozen
 from conditions.c.c_minimal.test_support import result
 
 
@@ -65,6 +68,34 @@ class CExportTests(unittest.TestCase):
         self.parent.write_text(self.parent.read_text() + " ")
         with self.assertRaisesRegex(RuntimeError, "hash mismatch"):
             c_rows(self.generation, "run")
+
+    def test_b_export_reads_the_local_copy_of_a_moved_run_tree(self):
+        root = Path(self.tmp.name)
+        local = root / "runs/tag_b/0000/bix-1__cap"
+        local.mkdir(parents=True)
+        (local / "capsule_result.json").write_text(json.dumps({"results": [result("q1", "kept")]}))
+        generation = {"episodes": [{"short_id": "bix-1", "capsule_uuid": "cap", "question_ids": ["q1"],
+                                    "workspace": "/old/checkout/runs/tag_b/0000/bix-1__cap", "accepted": True}]}
+        with patch.object(export_predictions, "ROOT", root):
+            rows = export_rows(generation, "b", "run")
+            self.assertEqual(rows[0]["candidates"][0]["answer"], "kept")
+            (local / "capsule_result.json").unlink()
+            with self.assertRaisesRegex(RuntimeError, "no frozen result"):
+                export_rows(generation, "b", "run")
+            generation["episodes"][0]["workspace"] = "/old/checkout/runs/tag_b/0000/missing"
+            with self.assertRaisesRegex(RuntimeError, "frozen workspace not found"):
+                export_rows(generation, "b", "run")
+
+    def test_export_refuses_a_changed_frozen_artifact(self):
+        artifact = Path(self.tmp.name) / "b/bix-1/capsule_result.json"
+        generation = json.loads(self.parent.read_text())
+        generation["freeze"]["artifacts"] = [
+            {"path": str(artifact), "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}]
+        self.parent.write_text(json.dumps(generation))
+        self.assertEqual(load_frozen(self.parent)["episodes"][0]["short_id"], "bix-1")
+        artifact.write_text(artifact.read_text() + " ")
+        with self.assertRaisesRegex(RuntimeError, "frozen artifact changed"):
+            load_frozen(self.parent)
 
 
 if __name__ == "__main__":

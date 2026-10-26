@@ -71,33 +71,61 @@ Imports only go up the hierarchy: `c_blind` → `c_single` → `c_minimal` → `
 
 ## Run
 
-Prerequisites: a frozen B generation from `conditions/b/runner.py` and its private
-scoring (`status: completed_posthoc_after_freeze`, produced outside this checkout).
+Prerequisites: a frozen B generation from `conditions/b/runner.py` and its post-freeze
+scoring (`status: completed_posthoc_after_freeze`). This checkout never grades: the private
+sibling repository `../bixbench78_grader/` holds the answer key and scores the exported B
+predictions (DeepSeek for `llm_verifier` questions). Its output records the B generation's
+`source_generation_sha256`; `load_parent` rejects a scoring made for any other B generation.
 
 ```bash
-# Preflight: no model calls; prints locked/target counts, model and default paths.
-python conditions/c/c_minimal/runner.py \
-  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
+# 1. Export frozen B and have the sibling grader score it -> analysis/<B_TAG>_scoring.json
+python scripts/export_predictions.py --generation analysis/<B_TAG>_generation.json --condition b \
+  --output results/<B_TAG>/b.jsonl --provenance results/<B_TAG>/b.provenance.json --source-run <B_TAG>
+python ../bixbench78_grader/score.py --predictions results/<B_TAG>/b.jsonl \
+  --provenance results/<B_TAG>/b.provenance.json --output analysis/<B_TAG>_scoring.json
 
-# One-question paid pilot with its own paths, then full runs + export:
-python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/c/pilot_c_minimal \
+# 2. Preflight: no model calls; prints locked/target counts, model and default paths.
+python conditions/c/c_minimal/runner.py \
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
+
+# 3. One-question paid pilot with its own paths, then full runs + export:
+python conditions/c/c_minimal/runner.py --execute --limit 1 --run-root runs/pilot_c_minimal \
   --output analysis/pilot_c_minimal_generation.json --report reports/PILOT_C_MINIMAL.md \
-  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring <scoring.json>
-VERSION=all scripts/run_c.sh <B_TAG> <scoring.json>    # c_minimal, c_single, c_blind
+  --parent-generation analysis/<B_TAG>_generation.json --parent-scoring analysis/<B_TAG>_scoring.json
+scripts/run_c.sh <B_TAG> all    # c_minimal, c_single, c_blind
 ```
+
+`run_c.sh B_TAG [VERSION] [SCORING_JSON]` (VERSION defaults to `c_minimal`) picks up where things stand. A level whose generation exists is
+reported as completed and skipped. An interrupted level continues in its run root with
+`--resume`: of the rescue targets in the B scoring, those that finished (their
+`run_manifest.json` was written) are kept and the rest restart in clean workspaces. A level not
+yet started runs from scratch. While no level of the
+B run has started, B is re-exported and re-scored with `../bixbench78_grader/score.py` (skipped
+when `SCORING_JSON` is given) and the parent registry is rebuilt; once one has started, that
+scoring and registry are reused, since the started runs are bound to them. `FRESH=1` deletes the
+selected levels' runs and outputs first.
+
+A C run lives next to its B parent, at `runs/<B_TAG>_<level>` (for example
+`runs/hard_isolated_<id>_b_c_minimal`), so `scripts/pack_run_artifacts.py <experiment_id>`
+and `cleanup_run_artifacts.py` pick it up with the B run. The archive includes C's run-root
+records (`protocol.json`, `prompt_snapshot.json`, `code_snapshot/`) and its
+`frozen_parent_packets/`, `repair_questions/` and `blind_contracts/` workspaces. C output is
+selected by B's private verdicts, so every C file is marked `feedback_assisted` in
+`PACK_MANIFEST.json`, and `answer_blind` is false whenever any is packed. Scoring files stay
+excluded as before.
 
 Model and effort default to the parent B manifest (B and C were matched historically);
 override with `--model` / `--repair-reasoning-effort`. All levels share
 `analysis/<B_TAG>_c_parent.json`, so they repair exactly the same questions.
-`--execute` refuses a nonempty run root or an existing output file.
+`--execute` refuses an existing output file, and a nonempty run root unless `--resume` is given.
 
 Tests (offline, from the checkout root):
 
 ```bash
 python -m unittest conditions.c.c_minimal.test_parent conditions.c.c_minimal.test_rescue_main \
   conditions.c.c_minimal.test_repair_policy conditions.c.c_minimal.test_c_minimal \
-  conditions.c.c_minimal.test_export conditions.c.c_single.test_c_single \
-  conditions.c.c_blind.test_c_blind
+  conditions.c.c_minimal.test_export conditions.c.c_minimal.test_pack_run_artifacts \
+  conditions.c.c_single.test_c_single conditions.c.c_blind.test_c_blind
 ```
 
 ## Differences from the Codex source

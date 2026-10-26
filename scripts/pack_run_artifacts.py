@@ -7,18 +7,30 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Controller-owned records written into each attempt workspace (Native and B).
+# Controller-owned records written into each attempt workspace (Native, B and C).
 WORKSPACE_FILES = (
     "question.json", "questions.json", "environment_contract.json", "operation_hints.json",
     "question_result.json", "capsule_result.json", "run_manifest.json", "isolation_boundary.json",
     "event_timeline.json", "events.jsonl", "stderr.log",
+    # C: frozen B packet, repair input/output and the blind contract phase.
+    "question_only.json", "feedback.json", "repair_packet.json", "primary_result.json",
+    "primary_provenance.json", "primary_grounding.json", "primary_canonical.json", "imported_artifacts.json",
+    "blind_contract.json", "phase_freeze.json", "repair_result.json", "final_result.json",
 )
+# Per-run-root records (C: protocol, prompt and code snapshot frozen before the first model call).
+RUN_ROOT_FILES = ("protocol.json", "prompt_snapshot.json")
+RUN_ROOT_DIRS = ("code_snapshot",)
+# C workspaces live under these stages, one directory per question, instead of NNNN/.
+C_STAGES = ("repair_questions/*/*", "blind_contracts/*/*", "frozen_parent_packets/*")
+# Path components that mark C output (runs/<tag>_c_minimal, analysis/<tag>_c_parent.json, results/<tag>/c_blind.jsonl).
+C_OUTPUT = re.compile(r"(?:^|_)c_(?:minimal|single|blind|parent)(?:[._]|$)", re.I)
 # Generated scripts, audits and outputs. data/, tmp/ and home/ (OpenCode config/state) are never packed.
 WORKSPACE_DIRS = ("analysis",)
 # Checkout-level directories holding per-experiment manifests, reports, predictions and logs.
@@ -42,8 +54,9 @@ def run_roots(root: Path, experiment: str) -> list[Path]:
 
 def workspaces(run_root: Path) -> list[Path]:
     stages = [run_root, *sorted(run_root.glob("resume_*"))]
-    return [path for stage in stages for path in sorted(stage.glob("[0-9][0-9][0-9][0-9]/*"))
-            if path.is_dir() and not path.is_symlink()]
+    found = [path for stage in stages for path in sorted(stage.glob("[0-9][0-9][0-9][0-9]/*"))]
+    found += [path for pattern in C_STAGES for path in sorted(run_root.glob(pattern))]
+    return [path for path in found if path.is_dir() and not path.is_symlink()]
 
 
 def regular_files(directory: Path) -> list[Path]:
@@ -61,8 +74,13 @@ def belongs_to(name: str, experiment: str) -> bool:
 
 
 def is_answer_derived(path: Path) -> bool:
-    """Private-evaluator scoring output; kept out of the answer-blind archive."""
+    """Private-evaluator scoring output; kept out of the archive."""
     return "scoring" in path.name.lower()
+
+
+def is_feedback_assisted(relative: str) -> bool:
+    """C output. C is selected by B's private verdicts, so it is packed but labelled, never answer-blind."""
+    return any(C_OUTPUT.search(part) for part in relative.split("/"))
 
 
 def experiment_outputs(root: Path, experiment: str) -> list[Path]:
@@ -83,6 +101,9 @@ def experiment_outputs(root: Path, experiment: str) -> list[Path]:
 def workspace_artifacts(roots: list[Path]) -> list[Path]:
     files: list[Path] = []
     for run_root in roots:
+        files += [run_root / name for name in RUN_ROOT_FILES]
+        files += [path for name in RUN_ROOT_DIRS if (run_root / name).is_dir()
+                  for path in regular_files(run_root / name)]
         for workspace in workspaces(run_root):
             files += [workspace / name for name in WORKSPACE_FILES]
             files += [path for name in WORKSPACE_DIRS if (workspace / name).is_dir()
@@ -91,7 +112,7 @@ def workspace_artifacts(roots: list[Path]) -> list[Path]:
 
 
 def candidates(root: Path, experiment: str, roots: list[Path]) -> list[Path]:
-    """Everything the archive should hold: workspace artifacts plus answer-blind experiment outputs."""
+    """Everything the archive should hold: workspace artifacts plus experiment outputs other than scoring."""
     outputs = [path for path in experiment_outputs(root, experiment) if not is_answer_derived(path)]
     return workspace_artifacts(roots) + outputs
 
@@ -139,7 +160,12 @@ def main() -> None:
         "excluded_workspace_content": ["data/", "tmp/", "home/", "symlinks"],
         "file_count": len(packed),
         "total_bytes": sum(size for _, _, size in packed),
-        "files": [{"path": relative, "bytes": size, "sha256": sha256(path)} for path, relative, size in packed],
+        "answer_blind": not any(is_feedback_assisted(relative) for _, relative, _ in packed),
+        "feedback_assisted_note": "files marked feedback_assisted are Condition C output, selected by B's private "
+                                  "verdicts (only B-No questions are repaired); they hold no answer key or scoring",
+        "files": [{"path": relative, "bytes": size, "sha256": sha256(path),
+                   **({"feedback_assisted": True} if is_feedback_assisted(relative) else {})}
+                  for path, relative, size in packed],
         "skipped": skipped,
         "excluded_answer_derived": [path.relative_to(root).as_posix() for path in experiment_outputs(root, experiment)
                                     if is_answer_derived(path)],
@@ -153,6 +179,7 @@ def main() -> None:
         archive.writestr(f"{experiment}/PACK_MANIFEST.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     partial.replace(output)
     print(json.dumps({"output": str(output), "run_roots": manifest["run_roots"], "workspaces": manifest["workspaces"],
+                      "answer_blind": manifest["answer_blind"],
                       "files": manifest["file_count"], "skipped": len(skipped),
                       "zip_bytes": output.stat().st_size}, indent=2))
 

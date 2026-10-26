@@ -76,6 +76,14 @@ class RescueMainTests(unittest.TestCase):
         self.assertEqual((summary["model"], summary["reasoning_effort"]), ("deepseek/deepseek-flash", "high"))
         self.assertFalse((self.base / "c_run").exists())
 
+    def test_default_run_root_sits_directly_under_runs(self):
+        argv = ["runner.py", "--parent-generation", str(self.generation), "--parent-scoring", str(self.scoring),
+                "--parent-registry", str(self.base / "registry.json")]
+        stdout = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout):
+            rescue_main.main(MinimalRepair())
+        self.assertEqual(json.loads(stdout.getvalue())["run_root"], str(ROOT / "runs/tag_b_c_minimal"))
+
     def test_execute_freezes_protocol_snapshot_and_rescue(self):
         summary = self.run_main("--execute", agent=FakeAgent([repair_step(proposal())]))
         self.assertEqual((summary["c_rescue_targets"], summary["c_rescue_success"], summary["total_agent_calls"]), (1, 1, 1))
@@ -93,6 +101,16 @@ class RescueMainTests(unittest.TestCase):
         for artifact in output["freeze"]["artifacts"]:
             self.assertEqual(sha(ROOT / artifact["path"]), artifact["sha256"])
 
+    def test_execute_refuses_a_scoring_that_locks_nothing(self):
+        self.scoring.write_text(json.dumps({"status": "completed_posthoc_after_freeze", "verdicts": [
+            {"question_id": q, "present": False, "correct": False, "accepted": True, "resolved": False} for q in QIDS]}))
+        self.assertEqual(self.run_main()["b_answered"], 0)
+        agent = FakeAgent([])
+        with self.assertRaisesRegex(SystemExit, "locks no question"):
+            self.run_main("--execute", agent=agent)
+        self.assertEqual(agent.calls, [])
+        self.assertFalse((self.base / "c_run").exists())
+
     def test_execute_refuses_existing_output_or_nonempty_run_root(self):
         (self.base / "c_generation.json").write_text("{}")
         with self.assertRaises(SystemExit):
@@ -102,6 +120,28 @@ class RescueMainTests(unittest.TestCase):
         (self.base / "c_run/old").write_text("x")
         with self.assertRaises(SystemExit):
             self.run_main("--execute")
+
+    def test_resume_keeps_finished_questions_and_redoes_unfinished_ones(self):
+        self.run_main("--execute", agent=FakeAgent([repair_step(proposal())]))
+        output = self.base / "c_generation.json"
+        first = json.loads(output.read_text())
+        output.unlink()   # interrupted after the question finished, before the freeze
+        with self.assertRaisesRegex(SystemExit, "--resume"):
+            self.run_main("--execute")
+        self.assertEqual(self.run_main(agent=FakeAgent([]))["finished_in_run_root"], 1)
+        agent = FakeAgent([])
+        summary = self.run_main("--execute", "--resume", agent=agent)
+        self.assertEqual((agent.calls, summary["resumed_finished_questions"], summary["c_rescue_success"]), ([], 1, 1))
+        self.assertEqual(json.loads(output.read_text())["rescue"], first["rescue"])
+
+        output.unlink()   # interrupted in the middle of the question: it restarts in a clean workspace
+        manifest, = (self.base / "c_run/repair_questions/bix-1-q2").glob("*/run_manifest.json")
+        manifest.unlink()
+        agent = FakeAgent([repair_step(proposal())])
+        summary = self.run_main("--execute", "--resume", agent=agent)
+        self.assertEqual((len(agent.calls), summary["resumed_finished_questions"]), (1, 0))
+        for artifact in json.loads(output.read_text())["freeze"]["artifacts"]:
+            self.assertEqual(sha(ROOT / artifact["path"]), artifact["sha256"])
 
 
 if __name__ == "__main__":

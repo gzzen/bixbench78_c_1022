@@ -2,8 +2,9 @@
 
 Answer-blind generation code only. This directory contains no generated
 output, reports, frozen predictions, diagnostics, run workspaces, or staging
-files. It also contains no answer key or scorer. Score frozen predictions
-later in the private evaluation bundle, never from this checkout.
+files. It also contains no answer key or scorer. Frozen, exported predictions
+are scored by the private sibling repository `../bixbench78_grader/` (answer key
+plus DeepSeek grader), which scripts call by relative path only after freeze.
 
 - `conditions/`: Native and B runners, prompts, schemas and protocols; C rescue
   levels over a frozen, privately scored B run (`conditions/c/`)
@@ -23,7 +24,8 @@ Runs create `analysis/`, `reports/`, `results/`, `runs/` and `logs/` here,
 and `.gitignore` keeps them out of Git.
 
 Condition C (`conditions/c/`) is feedback-assisted. It reads a frozen B generation
-plus that run's private scoring (produced outside this checkout) and repairs only the
+plus that run's post-freeze scoring (made by `../bixbench78_grader/score.py`) and
+repairs only the
 B-No questions in isolated OpenCode calls. Its three levels are nested:
 `c_minimal` (base, holds the core) ⊂ `c_single` (+ semantic audit) ⊂ `c_blind`
 (+ parent-blind contract). See [conditions/c/README.md](conditions/c/README.md).
